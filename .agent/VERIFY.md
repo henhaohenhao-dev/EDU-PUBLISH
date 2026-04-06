@@ -1,7 +1,7 @@
 # VERIFY — 联调验收步骤
 
 > **你是一个 AI agent，正在阅读本文件以完成部署后的验收。**
-> 本文件在 DEPLOY.md Step 7 被引用，前提是 CONFIGURE.md 已完成。
+> 本文件在 DEPLOY.md Step 8 被引用，前提是 CONFIGURE.md 已完成。
 
 ---
 
@@ -36,7 +36,7 @@ docker logs napcat 2>&1 | grep -i -E "login|account|uin|qq" | tail -10
 - 成功标志：出现 `login success`、账号 UIN 号、或 `Bot started` 类信息
 - 失败标志：仍在等待扫码、token 过期、网络错误
 
-如果未登录，回到 DEPLOY.md Step 4 重新扫码。
+如果未登录，回到 DEPLOY.md Step 5 重新扫码。
 
 ---
 

@@ -126,7 +126,7 @@ docker logs astrbot 2>&1 | grep -i -E "QQtoLocal|qq2local|plugin.*load" | tail -
 **获取目标标识符**：
 
 1. 在目标 Discord 频道中向 Bot 发送 `/qq2dc_bind_target`
-2. 或使用 `/qq2tg_show_umo` 查看当前频道的 unified message origin
+2. 或使用 `/qq2dc_show_umo` 查看当前频道的 unified message origin
 
 **如果不启用**，设置 `enable_discord_forward` → `false`。
 

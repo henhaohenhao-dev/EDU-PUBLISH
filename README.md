@@ -2,69 +2,141 @@
 
 # EDU-PUBLISH
 
-EDU-PUBLISH 是一个**通用高校通知聚合站模板**，可零代码适配任意高校/组织。
+EDU-PUBLISH是一个依赖Astrbot插件[astrbot-QQtoLocal](https://github.com/guiguisocute/astrbot-QQtoLocal)以及各类Agent（如OpenClaw，ClaudeCode，OpenCode，Codex…）自动分析整理的通用高校通知聚合站模板。致力于解放高校班委的转发压力，以及打破学院之间的信息差
 
-仅需编辑 3 个 YAML 配置文件即可完成品牌定制、订阅配置与 UI 调整。
+支持 PWA / RSS / 暗色模式 / 搜索 / 筛选 / 日历 / AI 摘要。
 
-## 核心特性
+![]( https://r2.guiguisocute.cloud/PicGo/2026/04/06/a99d0f42b9d46ffc20f088cc63fefa6f.png)
+---
 
-- **配置驱动**：站点品牌、调色盘、组件开关、订阅源均通过 YAML 配置
-- **内容生产**：支持 Agent 自动生成结构化卡片，也可手动维护
-- **PWA / RSS / 暗色模式 / 搜索 / 筛选 / 日历 / AI 摘要**
+## 整体架构
 
-## 端到端链路
+整套系统分三段，各自独立，可以只跑其中一段。
 
 ```mermaid
 flowchart LR
-  A[QQ 消息源] --> B[NapCat + AstrBot 桥接]
-  B --> C[archive/YYYY-MM-DD/]
-  C --> D[Agent 增量处理]
-  D --> E[content/card + conclusion]
-  E --> F[GitHub test/main]
-  F --> G[GitHub Actions build]
-  G --> H[dist + rss]
-  H --> I[静态站点]
+  subgraph bridge["步骤1：消息桥接"]
+    direction TB
+    QQ["QQ 群消息"] --> NapCat["NapCat"]
+    NapCat --> AstrBot["AstrBot + 归档插件"]
+    AstrBot --> archive["archive/YYYY-MM-DD/"]
+  end
+
+  subgraph agent["步骤2：Agent 内容生产"]
+    direction TB
+    read["读取 archive/"] --> parse["解析 + 去重 + 合并"]
+    parse --> card["content/card/*.md"]
+    card --> push["git push test"]
+  end
+
+  subgraph deploy["步骤3：站点部署"]
+    direction TB
+    actions["GitHub Actions"] --> build["pnpm run build"]
+    build --> dist["dist/ 静态站点"]
+    dist --> host["Cloudflare Pages<br/>或任意静态服务器"]
+  end
+
+  bridge --> agent --> deploy
 ```
 
-## 技术栈
+### 第一段：消息桥接
 
-| 层 | 技术 |
-|---|------|
-| 前端 | React 19 + TypeScript + Vite 6 + Tailwind CSS |
-| UI 组件 | Radix UI + shadcn/ui + Framer Motion |
-| 图表 | Recharts |
-| 内容编译 | Node.js 脚本（gray-matter + marked + yaml） |
-| 配置校验 | AJV (JSON Schema 2020-12) |
-| 浏览计数 | Cloudflare D1（可选，未配置时自动降级） |
+用 Docker 跑两个容器，把 QQ 群消息落盘到本地 `archive/` 目录：
 
+- **NapCat**：QQ 协议层，负责收发消息
+- **AstrBot + 归档插件**：接收 NapCat 转发的消息，按日期写入 `archive/YYYY-MM-DD/messages.md`
+
+两个容器通过 Docker 网络互通。`archive/` 是独立的 **Git submodule**，由插件持续写入，主仓库只读取不修改。clone 后需执行 `git submodule init && git submodule update` 初始化。
+
+### 第二段：Agent 内容生产
+
+Agent（AI 或人工）在项目目录里工作：
+
+1. 读取 `archive/` 中的新消息
+2. 按规则解析、去重、合并
+3. 生成结构化卡片到 `content/card/<school_slug>/`
+4. 写每日总结到 `content/conclusion/`
+5. 校验通过后 push 到 `test` 分支
+
+Agent 只改 `content/` 和 `worklog/`，不碰配置和代码。详细规则见 `BOT_RULES.md`。
+
+### 第三段：站点部署
+
+`test` 分支 push 触发 GitHub Actions，自动构建并部署到 Cloudflare Pages。也可以本地 `pnpm run build` 后把 `dist/` 扔到任意静态服务器。
+
+---
+
+## 部署
+
+### Agent 引导部署（推荐）
+
+适合从零开始搭建完整链路。流程：
+
+1. 在 GitHub 网页端 fork `guiguisocute/EDU-PUBLISH`
+2. clone 到本地
+3. 在项目根目录让 agent 执行：`阅读 .agent/DEPLOY.md 并按步骤执行`
+4. agent 会依次完成：Docker 环境检查 → NapCat + AstrBot 部署 → 插件配置 → 消息链路验证
+5. 本地链路跑通后，agent 会询问是否继续部署网页
+
+相关文件：`.agent/DEPLOY.md` → `CONFIGURE.md` → `VERIFY.md` → `PUBLISH.md`
+
+### GitHub Actions + Cloudflare Pages
+
+本地链路跑通后的可选发布方式。需在 GitHub 仓库配置以下 Secrets：
+
+| Secret | 说明 | 必填 |
+|--------|------|:---:|
+| `CLOUDFLARE_PROJECT_NAME` | Pages 项目名 | 是 |
+| `CLOUDFLARE_API_TOKEN` | API Token | 是 |
+| `CLOUDFLARE_ACCOUNT_ID` | Account ID | 是 |
+| `CLOUDFLARE_PAGES_URL` | 生产域名 | 是 |
+| `R2_BUCKET` | R2 存储桶（大附件） | 否 |
+| `R2_S3_ENDPOINT` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | R2 凭证 | 否 |
+
+浏览量统计（可选）：在 Cloudflare Dashboard 为 Pages 绑定 D1 数据库（Binding: `DB`），schema 见 `scripts/migrate-views-schema.sql`。未绑定时自动降级。
+
+### 手动部署
+
+不用 agent 引导，自己搭也很简单：
+
+1. **消息桥接**：Docker 部署 [NapCat](https://github.com/NapNeko/NapCat-Docker) + [AstrBot](https://github.com/Soulter/AstrBot)，安装归档插件 [astrbot-QQtoLocal](https://github.com/guiguisocute/astrbot-QQtoLocal)，配置插件的 `archive_root` 指向项目的 `archive/` 目录
+2. **archive submodule**：`archive/` 是独立的 Git submodule，clone 后需 `git submodule init && git submodule update`；插件写入的归档在 submodule 内独立提交推送
+3. **Agent 内容生产**：在项目目录运行 agent，读取 `archive/` 生成卡片到 `content/card/`，push `test` 分支
+4. **站点构建**：`pnpm install && pnpm run build`，`dist/` 是标准 SPA，部署时配 fallback 到 `index.html`
+
+各段可独立运行。只想看前端效果可以跳过桥接，`node scripts/generate-demo-content.mjs` 生成 demo 内容后直接 build。
+
+---
 ## 快速开始
 
 ```bash
-# 1. 克隆
+# 环境要求：Node.js >= 22，pnpm
 git clone https://github.com/your-org/edu-publish.git
 cd edu-publish
-
-# 2. 安装依赖（Node.js >= 22）
 pnpm install
 
-# 3. 编辑配置
-#    config/site.yaml          — 站点品牌、Logo、页脚、调色盘预设
-#    config/subscriptions.yaml — 订阅源（学院/部门）
-#    config/widgets.yaml       — 组件开关与参数
+# 编辑配置（见下方说明）
+# config/site.yaml          — 站点品牌
+# config/subscriptions.yaml — 订阅源
+# config/widgets.yaml       — 功能开关
 
-# 4. 生成 Demo 内容（可选）
+# 生成 Demo 内容（可选）
 node scripts/generate-demo-content.mjs
 
-# 5. 构建
-pnpm run build
+# 开发
+pnpm run dev          # http://localhost:3000
 
-# 6. 预览
-pnpm run preview
+# 构建
+pnpm run build        # 输出到 dist/
+pnpm run preview      # 预览构建产物
 ```
+---
 
 ## 配置文件
 
-### config/site.yaml — 站点品牌
+三个 YAML 文件控制整个站点，都在 `config/` 下。
+
+### site.yaml — 站点品牌
 
 ```yaml
 site_name: "EDU Publish"
@@ -91,10 +163,10 @@ seo:
   default_keywords: ["高校通知", "校园信息"]
 
 palette:
-  preset: "blue"       # 编译时默认色：red | blue | green | amber | custom
+  preset: "blue"       # red | blue | green | amber | custom
 ```
 
-### config/subscriptions.yaml — 订阅源
+### subscriptions.yaml — 订阅源
 
 ```yaml
 schools:
@@ -109,7 +181,7 @@ schools:
         order: 1
 ```
 
-### config/widgets.yaml — 组件与功能开关
+### widgets.yaml — 功能开关
 
 ```yaml
 modules:
@@ -123,150 +195,33 @@ modules:
 
 widgets:
   palette_switcher:
-    enabled: true          # 色相滑块开关
+    enabled: true          # 色相滑块
   calendar:
     enabled: true
   ai_summary:
     enabled: true
-  # ... 更多见 widgets.yaml 注释
 ```
 
-
-## 部署
-
-### Agent 一句话部署
-
-这套项目实际需要的运行面很小，但因为仓库内已经依赖了较多 GitHub Actions 配置，推荐真实使用顺序是：`GitHub 网页端 fork -> 本地 clone fork -> agent 读取本地 .agent -> 跑通消息链路 -> 再决定是否发布网页`。
-
-推荐入口不是远程 raw URL，而是本地仓库内执行：
-
-```text
-阅读 .agent/DEPLOY.md 并按步骤执行。
-```
-
-推荐实际流程：
-
-1. 先在 GitHub 网页端 fork `guiguisocute/EDU-PUBLISH` 到自己的账号下。
-2. 把自己的 fork clone 到本地，并在本地仓库根目录运行 agent。
-3. 让 agent 阅读 `.agent/DEPLOY.md`，从本地文档开始执行部署。
-4. agent 会先确认 fork 工作副本、安装项目级 skills，再完成 Docker、NapCat、AstrBot 和插件配置。
-5. agent 会引导完成测试消息收发，确认 `NapCat -> AstrBot -> 插件归档 -> agent` 这条本地链路跑通。
-6. 只有在这条链路通过后，agent 才会询问是否继续部署成真正网页。
-7. 如果用户确认需要，推荐继续使用 `Cloudflare Pages + GitHub Actions`。
-
-项目内相关入口文件：
-
-- `.agent/SKILLS.md`
-- `.agent/install-skills.sh`
-- `.agent/DEPLOY.md`
-- `.agent/CONFIGURE.md`
-- `.agent/VERIFY.md`
-- `.agent/PUBLISH.md`
-
-其中 `skills/` 目录是项目本地依赖目录，已在 `.gitignore` 中忽略；部署时安装到仓库内即可，不需要提交。
-
-### GitHub Actions + Cloudflare Pages
-
-这一部分是**可选的后续发布阶段**，推荐在本地消息链路已经跑通后再做。
-
-推荐方式：
-
-1. 保持仓库使用用户自己的 GitHub fork
-2. 使用 Cloudflare Pages 托管站点
-3. 使用仓库内现成的 GitHub Actions workflow 负责构建和部署
-
-需配置 Secrets：
-
-| Secret | 说明 | 必填 |
-|--------|------|:---:|
-| `CLOUDFLARE_PROJECT_NAME` | Pages 项目名 | 是 |
-| `CLOUDFLARE_API_TOKEN` | API Token | 是 |
-| `CLOUDFLARE_ACCOUNT_ID` | Account ID | 是 |
-| `CLOUDFLARE_PAGES_URL` | 生产域名 | 是 |
-| `R2_BUCKET` | R2 存储桶（大附件） | 否 |
-| `R2_S3_ENDPOINT` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | R2 凭证 | 否 |
-
-**D1 浏览计数**（可选）：在 Cloudflare Dashboard 中为 Pages 绑定 D1 数据库（Binding: `DB`），schema 见 `scripts/migrate-views-schema.sql`。未绑定时自动降级为无浏览量模式。
-
-### 手动构建 + 任意静态托管
-
-```bash
-pnpm install && pnpm run build
-# dist/ 目录即为完整静态站点，可部署到任意静态服务器
-```
-
-`dist/` 是标准 SPA，部署时需配置 fallback 到 `index.html`（如 nginx `try_files $uri /index.html`）。
-
-## 项目结构
-
-```
-EDU-PUBLISH/
-├── config/
-│   ├── site.yaml              # 站点品牌配置
-│   ├── subscriptions.yaml     # 订阅源配置
-│   └── widgets.yaml           # 组件开关与参数
-├── content/
-│   ├── card/**/*.md           # 通知卡片
-│   ├── conclusion/*.md        # 每日 AI 总结
-│   └── attachments/           # 附件
-├── scripts/
-│   ├── compile-site-config.mjs    # site.yaml → JSON + palette.css
-│   ├── compile-widgets-config.mjs # widgets.yaml → JSON
-│   ├── compile-content.mjs        # 卡片 → content-data.json
-│   ├── generate-rss.mjs           # RSS 生成
-│   ├── generate-manifest.mjs      # PWA manifest 生成
-│   ├── generate-demo-content.mjs  # 18 张 Demo 卡片生成
-│   └── validate-config.mjs        # JSON Schema 配置校验
-├── components/                # React 前端组件
-├── lib/
-│   ├── site-config.ts         # 站点配置消费入口
-│   ├── widgets-config.ts      # 组件配置消费入口
-│   └── palettes.ts            # 预设调色盘定义
-├── functions/
-│   ├── api/view.ts            # 浏览量记录 API
-│   ├── api/views.ts           # 浏览量查询 API
-│   └── lib/view-store.ts      # 数据库适配层（D1 / Null）
-├── schemas/                   # JSON Schema 校验文件
-├── public/
-│   ├── img/                   # Logo、图标、默认封面
-│   └── generated/             # 编译产物
-└── .env.example               # 环境变量模板
-```
+---
 
 ## 构建命令
 
 ```bash
-pnpm run validate          # 校验配置文件
-pnpm run compile:config    # 编译站点 + 组件配置
-pnpm run compile:content   # 编译内容数据
-pnpm run build             # 完整构建（自动执行 prebuild）
+pnpm run dev               # 开发模式（自动编译配置和内容）
+pnpm run build             # 完整构建（自动执行 validate → compile → content → images → rss → vite）
 pnpm run preview           # 预览构建产物
-pnpm run dev               # 开发模式
+
+pnpm run validate          # 校验配置文件（JSON Schema）
+pnpm run compile:config    # 编译 site.yaml + widgets.yaml → public/generated/
+pnpm run build:content     # 编译卡片 → content-data.json
+pnpm run build:rss         # 生成 RSS
 ```
 
-## 卡片 Frontmatter
+---
 
-每张卡片是 `content/card/<school_slug>/` 下的 Markdown 文件。
+## 卡片格式
 
-| 字段 | 必填 | 类型 | 说明 |
-|------|:---:|------|------|
-| `id` | 是 | string | 唯一标识，格式 `YYYYMMDD-<slug>-<序号>` |
-| `school_slug` | 是 | string | 对应 `subscriptions.yaml` 中的 slug |
-| `title` | 是 | string | 通知标题 |
-| `description` | 是 | `>-` 块 | 摘要，**必须使用 YAML `>-` 语法** |
-| `published` | 是 | ISO8601 | 发布时间，带 `+08:00` |
-| `source.channel` | 是 | string | 需匹配 `subscriptions.yaml` 中的订阅 title |
-| `source.sender` | 是 | string | 发送者 |
-| `category` | 否 | string | 分类 |
-| `tags` | 否 | string[] | 标签，建议 2-4 个 |
-| `pinned` | 否 | boolean | 置顶 |
-| `cover` | 否 | string | 封面图路径或 URL |
-| `badge` | 否 | string | 角标文本 |
-| `extra_url` | 否 | string | 外部链接 |
-| `start_at` / `end_at` | 否 | ISO8601 | 活动时间窗口 |
-| `attachments` | 否 | array | 附件列表 |
-
-### 示例
+每张通知卡片是 `content/card/<school_slug>/` 下的 Markdown 文件。
 
 ```yaml
 ---
@@ -287,35 +242,31 @@ source:
 attachments: []
 ---
 
-通知正文...
+通知正文（Markdown）...
 ```
+
+必填字段：`id`、`school_slug`、`title`、`description`（`>-` 语法）、`published`（ISO8601 `+08:00`）、`source.channel`、`source.sender`。
+
+完整字段说明见 `BOT_RULES.md` 第 5 节。
+
+---
+
+## 技术栈
+
+| 层 | 技术 |
+|---|------|
+| 前端 | React 19 + TypeScript + Vite 6 + Tailwind CSS |
+| UI 组件 | Radix UI + shadcn/ui + Framer Motion |
+| 图表 | Recharts |
+| 内容编译 | Node.js 脚本（gray-matter + marked + yaml） |
+| 配置校验 | AJV (JSON Schema 2020-12) |
+| 浏览计数 | Cloudflare D1（可选） |
+| 消息桥接 | NapCat + AstrBot (Docker) |
 
 ## RSS
 
 - 全站：`/rss.xml`
 - 按单位：`/rss/<school_slug>.xml`
-
-## Bot 工作模式
-
-Bot 采用 archive 增量处理模式：
-
-1. NapCat + AstrBot 桥接 QQ 群消息到 `archive/YYYY-MM-DD/`
-2. Agent 增量解析，去重后生成结构化卡片
-3. 两阶段生成：先模板落盘，再 LLM 补语义字段
-4. 识别补充/更正通知并入原卡片
-5. 写入 conclusion 每日总结
-6. 校验通过后推送 test 分支
-
-详见 `BOT_RULES.md`。
-
-## 本地开发
-
-```bash
-pnpm install
-pnpm run dev
-```
-
-默认地址：`http://localhost:3000`。要求 Node.js >= 22。
 
 ## License
 

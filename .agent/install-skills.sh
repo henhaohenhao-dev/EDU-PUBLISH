@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
+# install-skills.sh — 从 JXNU-PUBLISH-skills 仓库安装项目级 skills
+# 已存在的 skill 目录不会被覆盖
+
 set -euo pipefail
 
-ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-DEST_DIR="$ROOT_DIR/skills"
-REPO_URL="https://github.com/guiguisocute/JXNU-PUBLISH-skills.git"
-REPO_REF="${JXNU_PUBLISH_SKILLS_REF:-main}"
-TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/jxnu-publish-skills.XXXXXX")"
-
-SKILLS=(
+REPO="guiguisocute/JXNU-PUBLISH-skills"
+REF="${JXNU_PUBLISH_SKILLS_REF:-main}"
+SKILLS_DIR="./skills"
+REQUIRED_SKILLS=(
   daily-reconcile
   incremental-process
   map-source
@@ -18,51 +18,45 @@ SKILLS=(
   write-worklog
 )
 
-cleanup() {
-  rm -rf "$TMP_DIR"
-}
-
-trap cleanup EXIT
-
-if ! command -v git >/dev/null 2>&1; then
-  echo "git is required to install project skills." >&2
-  exit 1
-fi
-
-mkdir -p "$DEST_DIR"
-
-git clone \
-  --depth 1 \
-  --filter=blob:none \
-  --sparse \
-  --branch "$REPO_REF" \
-  "$REPO_URL" \
-  "$TMP_DIR/repo" \
-  >/dev/null
-
-git -C "$TMP_DIR/repo" sparse-checkout set skills >/dev/null
-
-installed=0
-skipped=0
-
-for skill in "${SKILLS[@]}"; do
-  src="$TMP_DIR/repo/skills/$skill"
-  dest="$DEST_DIR/$skill"
-
-  if [ ! -f "$src/SKILL.md" ]; then
-    echo "missing SKILL.md for $skill in $REPO_URL@$REPO_REF" >&2
-    exit 1
+# 检查是否有需要安装的 skill
+needs_install=false
+for skill in "${REQUIRED_SKILLS[@]}"; do
+  if [ ! -d "$SKILLS_DIR/$skill" ]; then
+    needs_install=true
+    break
   fi
-
-  if [ -e "$dest" ]; then
-    echo "skip: skills/$skill already exists"
-    skipped=$((skipped + 1))
-    continue
-  fi
-
-  cp -R "$src" "$dest"
-  echo "installed: skills/$skill"
-  installed=$((installed + 1))
 done
 
-echo "done: installed $installed skill(s), skipped $skipped existing skill(s)"
+if [ "$needs_install" = false ]; then
+  echo "All skills already installed, nothing to do."
+  exit 0
+fi
+
+# 创建临时目录用于 sparse checkout
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+
+echo "Cloning $REPO@$REF (sparse checkout: skills/) ..."
+git clone --depth 1 --branch "$REF" --filter=blob:none --sparse \
+  "https://github.com/$REPO.git" "$tmpdir" 2>/dev/null
+
+cd "$tmpdir"
+git sparse-checkout set skills/
+cd - > /dev/null
+
+# 逐个复制缺失的 skill
+mkdir -p "$SKILLS_DIR"
+for skill in "${REQUIRED_SKILLS[@]}"; do
+  src="$tmpdir/skills/$skill"
+  dst="$SKILLS_DIR/$skill"
+  if [ -d "$dst" ]; then
+    echo "skip: $skill (already exists)"
+  elif [ -d "$src" ]; then
+    cp -r "$src" "$dst"
+    echo "installed: $skill"
+  else
+    echo "WARNING: $skill not found in $REPO@$REF"
+  fi
+done
+
+echo "Done."
