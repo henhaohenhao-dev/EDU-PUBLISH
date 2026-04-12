@@ -6,8 +6,7 @@ EDU-PUBLISH 是一个依赖 AstrBot 插件 [astrbot-QQtoLocal](https://github.co
 
 支持 PWA / RSS / 暗色模式 / 搜索 / 筛选 / 日历 / AI 摘要。部署平台无关——Cloudflare Pages、Vercel、Netlify 或任意静态服务器均可。
 
-![](https://r2.guiguisocute.cloud/PicGo/2026/04/06/a99d0f42b9d46ffc20f088cc63fefa6f.png)
-
+![]( https://r2.guiguisocute.cloud/PicGo/2026/04/12/4288a3284ce6d197d3e13e449306d179.png)
 ---
 
 ## 整体架构
