@@ -3,32 +3,32 @@ import nodeFs from 'node:fs';
 import path from 'node:path';
 import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
-import { normalizePublicBaseUrl, siteUrlToR2Key } from './lib/r2-paths.mjs';
+import { normalizePublicBaseUrl, siteUrlToStorageKey } from './lib/storage-paths.mjs';
 
 const ROOT = process.cwd();
 const ATTACHMENTS_DIR = path.join(ROOT, 'content', 'attachments');
 
-const thresholdMb = Number.parseFloat(process.env.ATTACHMENT_R2_THRESHOLD_MB || '20');
+const thresholdMb = Number.parseFloat(process.env.ATTACHMENT_UPLOAD_THRESHOLD_MB || '20');
 const thresholdBytes = Number.isFinite(thresholdMb) && thresholdMb > 0
   ? Math.floor(thresholdMb * 1024 * 1024)
   : 20 * 1024 * 1024;
 
-const bucket = String(process.env.R2_BUCKET || '').trim();
-const endpoint = String(process.env.R2_S3_ENDPOINT || '').trim();
-const accessKeyId = String(process.env.R2_ACCESS_KEY_ID || '').trim();
-const secretAccessKey = String(process.env.R2_SECRET_ACCESS_KEY || '').trim();
-const publicBaseUrl = normalizePublicBaseUrl(process.env.R2_PUBLIC_BASE_URL);
-const dryRun = String(process.env.R2_UPLOAD_DRY_RUN || '').trim() === '1';
+const bucket = String(process.env.S3_BUCKET || '').trim();
+const endpoint = String(process.env.S3_ENDPOINT || '').trim();
+const accessKeyId = String(process.env.S3_ACCESS_KEY_ID || '').trim();
+const secretAccessKey = String(process.env.S3_SECRET_ACCESS_KEY || '').trim();
+const publicBaseUrl = normalizePublicBaseUrl(process.env.S3_PUBLIC_BASE_URL);
+const dryRun = String(process.env.S3_UPLOAD_DRY_RUN || '').trim() === '1';
 
 if (endpoint) {
   try {
     const u = new URL(endpoint);
     if (u.protocol !== 'https:') {
-      console.error('[r2-upload] R2_S3_ENDPOINT must use HTTPS');
+      console.error('[storage] S3_ENDPOINT must use HTTPS');
       process.exit(1);
     }
   } catch (e) {
-    console.error(`[r2-upload] Invalid R2_S3_ENDPOINT URL: ${e.message}`);
+    console.error(`[storage] Invalid S3_ENDPOINT URL: ${e.message}`);
     process.exit(1);
   }
 }
@@ -116,12 +116,12 @@ const uploadFile = async (client, filePath, key, size) => {
   });
 
   await upload.done();
-  console.log(`[r2] uploaded ${key} (${(size / (1024 * 1024)).toFixed(2)} MB)`);
+  console.log(`[storage] uploaded ${key} (${(size / (1024 * 1024)).toFixed(2)} MB)`);
 };
 
 const main = async () => {
   if (!hasAllRequiredConfig) {
-    console.log('[r2] skipped: missing config, requires R2_BUCKET, R2_S3_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_PUBLIC_BASE_URL');
+    console.log('[storage] skipped: missing config, requires S3_BUCKET, S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_PUBLIC_BASE_URL');
     return;
   }
 
@@ -134,16 +134,16 @@ const main = async () => {
     oversized.push({
       filePath,
       size: stat.size,
-      key: siteUrlToR2Key(attachmentFilePathToSiteUrl(filePath)),
+      key: siteUrlToStorageKey(attachmentFilePathToSiteUrl(filePath)),
     });
   }
 
   if (oversized.length === 0) {
-    console.log(`[r2] no files over ${thresholdMb} MB, nothing to upload`);
+    console.log(`[storage] no files over ${thresholdMb} MB, nothing to upload`);
     return;
   }
 
-  console.log(`[r2] found ${oversized.length} oversized attachments (>${thresholdMb} MB)`);
+  console.log(`[storage] found ${oversized.length} oversized attachments (>${thresholdMb} MB)`);
   const client = createClient();
 
   let uploaded = 0;
@@ -154,13 +154,13 @@ const main = async () => {
     const exists = await objectExistsWithSameSize(client, key, size);
     if (exists) {
       skipped += 1;
-      console.log(`[r2] skip existing ${key}`);
+      console.log(`[storage] skip existing ${key}`);
       continue;
     }
 
     if (dryRun) {
       uploaded += 1;
-      console.log(`[r2] dry-run upload ${key} (${(size / (1024 * 1024)).toFixed(2)} MB)`);
+      console.log(`[storage] dry-run upload ${key} (${(size / (1024 * 1024)).toFixed(2)} MB)`);
       continue;
     }
 
@@ -168,11 +168,11 @@ const main = async () => {
     uploaded += 1;
   }
 
-  console.log(`[r2] done: uploaded=${uploaded}, skipped=${skipped}, public_base=${publicBaseUrl}`);
+  console.log(`[storage] done: uploaded=${uploaded}, skipped=${skipped}, public_base=${publicBaseUrl}`);
 };
 
 main().catch((error) => {
-  console.error('[r2] upload failed');
+  console.error('[storage] upload failed');
   console.error(error.message);
   process.exit(1);
 });

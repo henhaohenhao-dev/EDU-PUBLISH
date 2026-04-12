@@ -1,6 +1,15 @@
 # ─── EDU-PUBLISH Demo Subscriptions ───
 # Replace these with your university's actual departments/schools.
 
+# 通知分类枚举（Bot 生成 category 字段时必须从此列表选取，末尾项为兜底值）
+categories:
+  - 通知公告
+  - 竞赛相关
+  - 志愿实习
+  - 二课活动
+  - 问卷填表
+  - 其它分类
+
 schools:
   - slug: info-engineering
     name: 信息工程学院

@@ -1,3 +1,14 @@
+/**
+ * View counting storage abstraction.
+ *
+ * Built-in backends:
+ * - D1ViewStore: Cloudflare D1 (used when env.DB is bound)
+ * - NullViewStore: No-op fallback (site works without any database)
+ *
+ * To add a new backend (e.g., PostgreSQL via Hyperdrive, Turso, PlanetScale):
+ * 1. Implement the ViewStore interface
+ * 2. Update createViewStore() to detect your backend from env
+ */
 /// <reference types="@cloudflare/workers-types" />
 
 export interface ViewStore {

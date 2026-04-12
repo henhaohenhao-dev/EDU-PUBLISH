@@ -1,18 +1,18 @@
 import { S3Client, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import fs from 'node:fs';
 import path from 'node:path';
-import { R2_MEDIA_PREFIXES, siteUrlToR2Key } from './lib/r2-paths.mjs';
+import { MEDIA_PREFIXES, siteUrlToStorageKey } from './lib/storage-paths.mjs';
 
 const s3Client = new S3Client({
   region: 'auto',
-  endpoint: process.env.R2_S3_ENDPOINT,
+  endpoint: process.env.S3_ENDPOINT,
   credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    accessKeyId: process.env.S3_ACCESS_KEY_ID,
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
   },
 });
 
-const BUCKET_NAME = process.env.R2_BUCKET;
+const BUCKET_NAME = process.env.S3_BUCKET;
 const TARGET_DIR = path.resolve(process.cwd(), 'dist');
 
 const getMimeType = (filePath) => {
@@ -48,12 +48,12 @@ const distFilePathToSiteUrl = (filePath) => {
   return `/${relativePath}`;
 };
 
-async function getExistingR2Objects(bucketName) {
+async function getExistingObjects(bucketName) {
   const existingObjects = new Map();
   let isTruncated = true;
   let continuationToken = undefined;
 
-  console.log('🔍 正在从 R2 获取已存在的文件列表，用于增量对比...');
+  console.log('[s3-sync] Listing existing objects for incremental comparison...');
 
   while (isTruncated) {
     const command = new ListObjectsV2Command({
@@ -70,56 +70,56 @@ async function getExistingR2Objects(bucketName) {
       isTruncated = response.IsTruncated;
       continuationToken = response.NextContinuationToken;
     } catch (error) {
-      console.error('❌ 获取 R2 文件列表失败，请检查密钥或 Bucket 名称:', error.message);
+      console.error('[s3-sync] Failed to list objects, check credentials or bucket name:', error.message);
       process.exit(1);
     }
   }
   return existingObjects;
 }
 
-async function syncToR2() {
-  if (!BUCKET_NAME || !process.env.R2_S3_ENDPOINT) {
-    console.error('❌ 环境变量缺失: R2_BUCKET 或 R2_S3_ENDPOINT 未定义');
-    process.exit(1);
+async function syncToS3() {
+  if (!BUCKET_NAME || !process.env.S3_ENDPOINT) {
+    console.log('[s3-sync] skipped: S3_BUCKET or S3_ENDPOINT not set (object storage is optional)');
+    return;
   }
 
   let localFiles = [];
-  R2_MEDIA_PREFIXES.forEach((folder) => {
+  MEDIA_PREFIXES.forEach((folder) => {
     const folderPath = path.join(TARGET_DIR, folder);
     localFiles = localFiles.concat(getAllFilesInDir(folderPath));
   });
 
   if (localFiles.length === 0) {
-    console.log('⚠️ 在 dist 中未找到 attachments, covers 或 img 文件夹，或文件夹为空，跳过上传。');
+    console.log('[s3-sync] No attachments, covers, or img files found in dist/, skipping.');
     return;
   }
 
-  const existingR2Objects = await getExistingR2Objects(BUCKET_NAME);
-  console.log(`📊 R2 存储桶中当前共有 ${existingR2Objects.size} 个文件。`);
+  const existingObjects = await getExistingObjects(BUCKET_NAME);
+  console.log(`[s3-sync] Bucket contains ${existingObjects.size} existing objects.`);
 
   const filesToUpload = localFiles.filter((filePath) => {
-    const objectKey = siteUrlToR2Key(distFilePathToSiteUrl(filePath));
+    const objectKey = siteUrlToStorageKey(distFilePathToSiteUrl(filePath));
     const localSize = fs.statSync(filePath).size;
 
-    if (!existingR2Objects.has(objectKey)) return true;
-    if (existingR2Objects.get(objectKey) !== localSize) return true;
+    if (!existingObjects.has(objectKey)) return true;
+    if (existingObjects.get(objectKey) !== localSize) return true;
     return false;
   });
 
   if (filesToUpload.length === 0) {
-    console.log('✅ 所有本地文件在 R2 中均已存在且大小一致，无需上传！');
+    console.log('[s3-sync] All local files already exist with matching size, nothing to upload.');
     return;
   }
 
-  console.log(`📦 经过对比，本次需增量上传 ${filesToUpload.length} 个文件...`);
+  console.log(`[s3-sync] ${filesToUpload.length} files to upload...`);
 
   const CONCURRENCY_LIMIT = 10;
   for (let i = 0; i < filesToUpload.length; i += CONCURRENCY_LIMIT) {
     const chunk = filesToUpload.slice(i, i + CONCURRENCY_LIMIT);
-    console.log(`⏳ 正在上传第 ${i + 1} 到 ${Math.min(i + CONCURRENCY_LIMIT, filesToUpload.length)} 个文件...`);
+    console.log(`[s3-sync] Uploading ${i + 1} to ${Math.min(i + CONCURRENCY_LIMIT, filesToUpload.length)}...`);
 
     const uploadPromises = chunk.map(async (filePath) => {
-      const objectKey = siteUrlToR2Key(distFilePathToSiteUrl(filePath));
+      const objectKey = siteUrlToStorageKey(distFilePathToSiteUrl(filePath));
       const fileStream = fs.createReadStream(filePath);
       const contentType = getMimeType(filePath);
 
@@ -132,16 +132,16 @@ async function syncToR2() {
 
       try {
         await s3Client.send(new PutObjectCommand(uploadParams));
-        console.log(`✅ 上传成功: ${objectKey}`);
+        console.log(`[s3-sync] uploaded: ${objectKey}`);
       } catch (error) {
-        console.error(`❌ 上传失败: ${objectKey}`, error.message);
+        console.error(`[s3-sync] failed: ${objectKey}`, error.message);
       }
     });
 
     await Promise.all(uploadPromises);
   }
 
-  console.log('🎉 本次增量同步 R2 任务圆满完成！');
+  console.log('[s3-sync] Incremental sync complete.');
 }
 
-syncToR2();
+syncToS3();

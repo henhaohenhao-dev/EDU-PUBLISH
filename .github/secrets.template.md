@@ -14,15 +14,15 @@
 | `CLOUDFLARE_PAGES_TEST_URL` | test 分支预览环境完整 HTTPS URL，不带末尾 `/` | `https://test.edu-publish.pages.dev` |
 | `CLOUDFLARE_PAGES_URL` | main 分支生产环境完整 HTTPS URL，不带末尾 `/` | `https://edu-publish.pages.dev` |
 
-## Required (R2 attachments)
+## Optional (S3-compatible Object Storage)
 
 | Name | Value format | Example |
 | --- | --- | --- |
-| `R2_PUBLIC_BASE_URL` | R2 对外访问基础 URL，不带末尾 `/` | `https://pub-r2.example.com` |
-| `R2_BUCKET` | R2 Bucket 名称 | `edu-publish` |
-| `R2_S3_ENDPOINT` | S3 兼容 endpoint（含 account id） | `https://<accountid>.r2.cloudflarestorage.com` |
-| `R2_ACCESS_KEY_ID` | R2 Access Key ID | `***` |
-| `R2_SECRET_ACCESS_KEY` | R2 Secret Access Key | `***` |
+| `S3_PUBLIC_BASE_URL` | 对象存储对外访问基础 URL，不带末尾 `/` | `https://pub-cdn.example.com` |
+| `S3_BUCKET` | Bucket 名称 | `edu-publish` |
+| `S3_ENDPOINT` | S3 兼容 endpoint | `https://<accountid>.r2.cloudflarestorage.com` |
+| `S3_ACCESS_KEY_ID` | Access Key ID | `***` |
+| `S3_SECRET_ACCESS_KEY` | Secret Access Key | `***` |
 
 ## Notes
 

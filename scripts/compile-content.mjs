@@ -4,7 +4,7 @@ import path from 'node:path';
 import matter from 'gray-matter';
 import { marked } from 'marked';
 import YAML from 'yaml';
-import { normalizePublicBaseUrl, siteUrlToR2PublicUrl } from './lib/r2-paths.mjs';
+import { normalizePublicBaseUrl, siteUrlToStoragePublicUrl } from './lib/storage-paths.mjs';
 
 // Disable indented code blocks — the card markdown files use leading spaces
 // for Chinese-style paragraph indentation, not code.  Fenced code blocks
@@ -38,10 +38,10 @@ const PUBLIC_COVERS_DIR = path.join(PUBLIC_DIR, 'covers');
 const PUBLIC_ATTACHMENTS_DIR = path.join(PUBLIC_DIR, 'attachments');
 const CONFIG_PATH = path.join(ROOT, 'config', 'subscriptions.yaml');
 
-const R2_PUBLIC_BASE_URL = normalizePublicBaseUrl(process.env.R2_PUBLIC_BASE_URL);
-const ATTACHMENT_R2_THRESHOLD_MB = Number.parseFloat(process.env.ATTACHMENT_R2_THRESHOLD_MB || '20');
-const ATTACHMENT_R2_THRESHOLD_BYTES = Number.isFinite(ATTACHMENT_R2_THRESHOLD_MB) && ATTACHMENT_R2_THRESHOLD_MB > 0
-  ? Math.floor(ATTACHMENT_R2_THRESHOLD_MB * 1024 * 1024)
+const STORAGE_PUBLIC_BASE_URL = normalizePublicBaseUrl(process.env.S3_PUBLIC_BASE_URL);
+const ATTACHMENT_UPLOAD_THRESHOLD_MB = Number.parseFloat(process.env.ATTACHMENT_UPLOAD_THRESHOLD_MB || '20');
+const ATTACHMENT_UPLOAD_THRESHOLD_BYTES = Number.isFinite(ATTACHMENT_UPLOAD_THRESHOLD_MB) && ATTACHMENT_UPLOAD_THRESHOLD_MB > 0
+  ? Math.floor(ATTACHMENT_UPLOAD_THRESHOLD_MB * 1024 * 1024)
   : 20 * 1024 * 1024;
 const attachmentUrlResolveCache = new Map();
 const missingAttachmentWarned = new Set();
@@ -132,10 +132,10 @@ const toAttachmentAbsolutePath = (url) => {
   return path.join(CONTENT_ATTACHMENTS_DIR, ...rel.split('/'));
 };
 
-const toR2PublicUrl = (url) => {
+const toStoragePublicUrl = (url) => {
   const cleanUrl = String(url || '').split('#')[0].split('?')[0].trim();
-  if (!toAttachmentRelativePath(cleanUrl) || !R2_PUBLIC_BASE_URL) return url;
-  return siteUrlToR2PublicUrl(cleanUrl, R2_PUBLIC_BASE_URL);
+  if (!toAttachmentRelativePath(cleanUrl) || !STORAGE_PUBLIC_BASE_URL) return url;
+  return siteUrlToStoragePublicUrl(cleanUrl, STORAGE_PUBLIC_BASE_URL);
 };
 
 const resolveAttachmentUrlForOutput = async (url, filePath) => {
@@ -145,7 +145,7 @@ const resolveAttachmentUrlForOutput = async (url, filePath) => {
     return attachmentUrlResolveCache.get(cacheKey);
   }
 
-  if (!R2_PUBLIC_BASE_URL || !normalizedUrl.startsWith('/attachments/')) {
+  if (!normalizedUrl.startsWith('/attachments/')) {
     attachmentUrlResolveCache.set(cacheKey, normalizedUrl);
     return normalizedUrl;
   }
@@ -158,10 +158,17 @@ const resolveAttachmentUrlForOutput = async (url, filePath) => {
 
   try {
     const stat = await fs.stat(absPath);
-    if (stat.size > ATTACHMENT_R2_THRESHOLD_BYTES) {
-      const externalUrl = toR2PublicUrl(normalizedUrl);
+    if (STORAGE_PUBLIC_BASE_URL && stat.size > ATTACHMENT_UPLOAD_THRESHOLD_BYTES) {
+      const externalUrl = toStoragePublicUrl(normalizedUrl);
       attachmentUrlResolveCache.set(cacheKey, externalUrl);
       return externalUrl;
+    }
+    if (!STORAGE_PUBLIC_BASE_URL && stat.size > 25 * 1024 * 1024) {
+      const rel = path.relative(ROOT, absPath);
+      const sizeMB = (stat.size / (1024 * 1024)).toFixed(1);
+      console.warn(`[attachments] Dropping oversized attachment reference (${sizeMB} MB): ${rel} — configure S3-compatible storage to serve large files`);
+      attachmentUrlResolveCache.set(cacheKey, '');
+      return '';
     }
   } catch {
     const warnKey = path.relative(ROOT, absPath);
@@ -180,7 +187,7 @@ const rewriteAttachmentsForOutput = async (attachments, filePath) => {
     ...item,
     url: await resolveAttachmentUrlForOutput(item.url, filePath),
   })));
-  return rewritten;
+  return rewritten.filter((item) => item.url);
 };
 
 const normalizeAttachments = (attachments, filePath) => {
@@ -677,7 +684,7 @@ const syncStaticAssets = async () => {
     { label: `copy ${path.relative(ROOT, CONTENT_IMG_DIR)}`, promise: fs.cp(CONTENT_IMG_DIR, PUBLIC_IMG_DIR, { recursive: true, force: true }) },
   ];
 
-  if (R2_PUBLIC_BASE_URL) {
+  if (STORAGE_PUBLIC_BASE_URL) {
     await fs.rm(PUBLIC_ATTACHMENTS_DIR, { recursive: true, force: true });
     await fs.mkdir(PUBLIC_ATTACHMENTS_DIR, { recursive: true });
     criticalTasks.push({
@@ -690,7 +697,7 @@ const syncStaticAssets = async () => {
             const stat = await fs.stat(src);
             if (stat.isDirectory()) return true;
             if (!stat.isFile()) return false;
-            return stat.size <= ATTACHMENT_R2_THRESHOLD_BYTES;
+            return stat.size <= ATTACHMENT_UPLOAD_THRESHOLD_BYTES;
           } catch {
             return false;
           }
@@ -698,9 +705,29 @@ const syncStaticAssets = async () => {
       }),
     });
   } else {
+    const PLATFORM_FILE_LIMIT = 25 * 1024 * 1024; // 25 MB — CF Pages single-file limit
     criticalTasks.push({
       label: `copy ${path.relative(ROOT, CONTENT_ATTACHMENTS_DIR)}`,
-      promise: fs.cp(CONTENT_ATTACHMENTS_DIR, PUBLIC_ATTACHMENTS_DIR, { recursive: true, force: true }),
+      promise: fs.cp(CONTENT_ATTACHMENTS_DIR, PUBLIC_ATTACHMENTS_DIR, {
+        recursive: true,
+        force: true,
+        filter: async (src) => {
+          try {
+            const stat = await fs.stat(src);
+            if (stat.isDirectory()) return true;
+            if (!stat.isFile()) return false;
+            if (stat.size > PLATFORM_FILE_LIMIT) {
+              const rel = path.relative(CONTENT_ATTACHMENTS_DIR, src);
+              const sizeMB = (stat.size / (1024 * 1024)).toFixed(1);
+              console.warn(`[attachments] SKIP oversized file (${sizeMB} MB, limit 25 MB): ${rel} — configure S3-compatible storage to serve large files`);
+              return false;
+            }
+            return true;
+          } catch {
+            return false;
+          }
+        },
+      }),
     });
   }
 

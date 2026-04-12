@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 
 const ROOT = process.cwd();
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -16,23 +15,15 @@ const isRasterCoverUrl = (value) => {
   return /\.(jpg|jpeg|png)$/i.test(url);
 };
 
-const runFfmpeg = (args) => {
-  const result = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', ...args], { stdio: 'pipe' });
-  if (result.error) {
-    throw result.error;
+let sharp;
+const loadSharp = async () => {
+  if (sharp) return true;
+  try {
+    sharp = (await import('sharp')).default;
+    return true;
+  } catch {
+    return false;
   }
-  if (result.status !== 0) {
-    const stderr = result.stderr?.toString()?.trim();
-    const stdout = result.stdout?.toString()?.trim();
-    const err = stderr || stdout || `ffmpeg exited with status ${String(result.status)}`;
-    throw new Error(err);
-  }
-};
-
-const hasFfmpeg = () => {
-  const result = spawnSync('ffmpeg', ['-version'], { stdio: 'pipe' });
-  if (result.error) return false;
-  return result.status === 0;
 };
 
 const pathExists = async (value) => {
@@ -80,7 +71,6 @@ const optimizeOne = async (urlPath) => {
     return { skipped: true, reason: 'missing' };
   }
 
-  // Validate that resolved paths stay within expected directories
   assertWithinDir(absInput, absInput === sourcePath ? CONTENT_DIR : PUBLIC_DIR, 'Input');
   assertWithinDir(outputBase, PUBLIC_DIR, 'Output');
 
@@ -100,10 +90,10 @@ const optimizeOne = async (urlPath) => {
   const base = outputBase.slice(0, -ext.length);
 
   const outputs = [
-    { suffix: '.webp', width: null, quality: '72' },
-    { suffix: '@sm.webp', width: 480, quality: '68' },
-    { suffix: '@md.webp', width: 768, quality: '70' },
-    { suffix: '@lg.webp', width: 1200, quality: '72' },
+    { suffix: '.webp', width: null, quality: 72 },
+    { suffix: '@sm.webp', width: 480, quality: 68 },
+    { suffix: '@md.webp', width: 768, quality: 70 },
+    { suffix: '@lg.webp', width: 1200, quality: 72 },
   ];
 
   let hasStaleOutput = false;
@@ -129,18 +119,14 @@ const optimizeOne = async (urlPath) => {
     for (const output of outputs) {
       const outPath = `${base}${output.suffix}`;
       assertWithinDir(outPath, PUBLIC_DIR, 'Output');
-      const vf = output.width
-        ? `scale='min(iw,${output.width})':-2:flags=lanczos`
-        : 'scale=iw:-2:flags=lanczos';
 
-      runFfmpeg([
-        '-i', absInput,
-        '-vf', vf,
-        '-c:v', 'libwebp',
-        '-quality', output.quality,
-        '-compression_level', '6',
-        outPath,
-      ]);
+      let pipeline = sharp(absInput);
+      if (output.width) {
+        pipeline = pipeline.resize({ width: output.width, withoutEnlargement: true });
+      }
+      pipeline = pipeline.webp({ quality: output.quality, effort: 6 });
+
+      await pipeline.toFile(outPath);
       generated.push(outPath);
     }
   } catch (err) {
@@ -154,8 +140,8 @@ const optimizeOne = async (urlPath) => {
 };
 
 const main = async () => {
-  if (!hasFfmpeg()) {
-    console.warn('[optimize-images] ffmpeg is unavailable, skip image optimization.');
+  if (!(await loadSharp())) {
+    console.warn('[optimize-images] sharp is unavailable, skip image optimization.');
     return;
   }
 

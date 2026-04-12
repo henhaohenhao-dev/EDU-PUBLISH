@@ -46,7 +46,7 @@ flowchart LR
 - **NapCat**：QQ 协议层，负责收发消息
 - **AstrBot + 归档插件**：接收 NapCat 转发的消息，按日期写入 `archive/YYYY-MM-DD/messages.md`
 
-两个容器通过 Docker 网络互通。`archive/` 是独立的 **Git submodule**，由插件持续写入，主仓库只读取不修改。clone 后需执行 `git submodule init && git submodule update` 初始化。
+两个容器通过 Docker 网络互通。`archive/` 由插件持续写入，主仓库只读取不修改。
 
 ### 第二段：Agent 内容生产
 
@@ -90,17 +90,17 @@ Agent 只改 `content/` 和 `worklog/`，不碰配置和代码。详细规则见
 | `CLOUDFLARE_API_TOKEN` | API Token | 是 |
 | `CLOUDFLARE_ACCOUNT_ID` | Account ID | 是 |
 | `CLOUDFLARE_PAGES_URL` | 生产域名 | 是 |
-| `R2_BUCKET` | R2 存储桶（大附件） | 否 |
-| `R2_S3_ENDPOINT` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | R2 凭证 | 否 |
+| `S3_BUCKET` | S3 兼容存储桶（大附件） | 否 |
+| `S3_ENDPOINT` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | S3 兼容存储凭证 | 否 |
 
-浏览量统计（可选）：在 Cloudflare Dashboard 为 Pages 绑定 D1 数据库（Binding: `DB`），schema 见 `scripts/migrate-views-schema.sql`。未绑定时自动降级。
+浏览量统计（可选）：部署到 Cloudflare Pages 时可绑定 D1 数据库（Binding: `DB`），schema 见 `scripts/migrate-views-schema.sql`。未绑定或部署到其它平台时自动降级为无统计模式。ViewStore 接口支持扩展自定义后端。
 
 ### 手动部署
 
 不用 agent 引导，自己搭也很简单：
 
 1. **消息桥接**：Docker 部署 [NapCat](https://github.com/NapNeko/NapCat-Docker) + [AstrBot](https://github.com/Soulter/AstrBot)，安装归档插件 [astrbot-QQtoLocal](https://github.com/guiguisocute/astrbot-QQtoLocal)，配置插件的 `archive_root` 指向项目的 `archive/` 目录
-2. **archive submodule**：`archive/` 是独立的 Git submodule，clone 后需 `git submodule init && git submodule update`；插件写入的归档在 submodule 内独立提交推送
+2. **archive 目录**：`archive/` 由 AstrBot 插件持续写入归档数据，`.gitignore` 已忽略其运行时内容
 3. **Agent 内容生产**：在项目目录运行 agent，读取 `archive/` 生成卡片到 `content/card/`，push `test` 分支
 4. **站点构建**：`pnpm install && pnpm run build`，`dist/` 是标准 SPA，部署时配 fallback 到 `index.html`
 

@@ -1,6 +1,6 @@
-const R2_MEDIA_PREFIXES = Object.freeze(['attachments', 'img', 'covers']);
+const MEDIA_PREFIXES = Object.freeze(['attachments', 'img', 'covers']);
 
-const R2_MEDIA_PREFIX_SET = new Set(R2_MEDIA_PREFIXES);
+const MEDIA_PREFIX_SET = new Set(MEDIA_PREFIXES);
 
 const safeDecodeUriComponent = (value) => {
   try {
@@ -22,14 +22,14 @@ const normalizeSitePath = (siteUrl) => {
   }
 
   const prefix = segments[0];
-  if (!R2_MEDIA_PREFIX_SET.has(prefix)) {
-    throw new Error(`Unsupported R2 media prefix: ${prefix}`);
+  if (!MEDIA_PREFIX_SET.has(prefix)) {
+    throw new Error(`Unsupported media prefix: ${prefix}`);
   }
 
   return segments.map((segment) => {
     const decoded = safeDecodeUriComponent(segment);
     if (!decoded || decoded === '.' || decoded === '..' || decoded.includes('/') || decoded.includes('\\')) {
-      throw new Error(`Invalid R2 media path segment: ${segment}`);
+      throw new Error(`Invalid media path segment: ${segment}`);
     }
     return decoded;
   });
@@ -37,21 +37,21 @@ const normalizeSitePath = (siteUrl) => {
 
 const normalizePublicBaseUrl = (value) => String(value || '').trim().replace(/\/+$/, '');
 
-const siteUrlToR2Key = (siteUrl) => normalizeSitePath(siteUrl)
+const siteUrlToStorageKey = (siteUrl) => normalizeSitePath(siteUrl)
   .map((segment) => encodeURIComponent(segment))
   .join('/');
 
-const siteUrlToR2PublicUrl = (siteUrl, publicBaseUrl) => {
+const siteUrlToStoragePublicUrl = (siteUrl, publicBaseUrl) => {
   const base = normalizePublicBaseUrl(publicBaseUrl);
   if (!base) {
-    throw new Error('R2 public base URL is required');
+    throw new Error('Storage public base URL is required');
   }
-  return `${base}/${siteUrlToR2Key(siteUrl)}`;
+  return `${base}/${siteUrlToStorageKey(siteUrl)}`;
 };
 
 export {
-  R2_MEDIA_PREFIXES,
+  MEDIA_PREFIXES,
   normalizePublicBaseUrl,
-  siteUrlToR2Key,
-  siteUrlToR2PublicUrl,
+  siteUrlToStorageKey,
+  siteUrlToStoragePublicUrl,
 };
