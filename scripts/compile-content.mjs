@@ -532,7 +532,8 @@ const loadCards = async ({ schoolMap, subscriptionMap }) => {
 };
 
 const loadConclusions = async ({ schools, schoolMap }) => {
-  const files = await walkMarkdownFiles(CONCLUSION_DIR);
+  const conclusionDirExists = await pathExists(CONCLUSION_DIR);
+  const files = conclusionDirExists ? await walkMarkdownFiles(CONCLUSION_DIR) : [];
   const bySchool = {};
 
   for (const school of schools) {
