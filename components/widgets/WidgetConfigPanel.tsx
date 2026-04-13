@@ -27,9 +27,9 @@ export const WidgetConfigPanel: React.FC<WidgetConfigPanelProps> = ({ widgets, o
         type="button"
         onClick={() => setOpen(prev => !prev)}
         className={cn(
-          'w-full flex items-center justify-center gap-1.5 text-[11px] py-1.5 rounded-lg border transition-colors',
+          'w-full flex items-center justify-center gap-1.5 text-[11px] py-1.5 rounded-lg border transition-colors bg-card',
           open
-            ? 'text-primary border-primary/30 bg-primary/5'
+            ? 'text-primary border-primary/30'
             : 'text-muted-foreground border-border hover:text-foreground hover:border-foreground/30'
         )}
       >
