@@ -1,21 +1,22 @@
 ---
-id: "20251201-demo-normal-001"
-school_slug: "info-engineering"
-title: "关于开展本学期教学检查工作的通知"
-description: >-
-  为进一步规范教学管理，提升教学质量，现开展本学期中期教学检查工作。
+id: 20251201-demo-normal-001
+school_slug: info-engineering
+title: 关于开展本学期教学检查工作的通知
+description: 为进一步规范教学管理，提升教学质量，现开展本学期中期教学检查
 published: 2025-12-01T10:00:00+08:00
-category: "通知公告"
-tags: ["教务安排", "材料提交"]
+category: 通知公告
+tags:
+  - 教务安排
+  - 材料提交
 pinned: false
-cover: "https://picsum.photos/seed/edu-normal/800/400"
+cover: https://picsum.photos/seed/edu-normal/800/400
 badge: ""
 extra_url: ""
 start_at: ""
 end_at: ""
 source:
-  channel: "学院通知"
-  sender: "教务处"
+  channel: 学院通知
+  sender: 教务处
 attachments: []
 ---
 
