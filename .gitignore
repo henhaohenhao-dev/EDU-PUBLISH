@@ -88,3 +88,4 @@ temp/
 *.seed
 coverage
 .nyc_output
+wrangler.toml
