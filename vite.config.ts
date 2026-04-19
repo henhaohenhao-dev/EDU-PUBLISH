@@ -14,7 +14,7 @@ function swVersionPlugin(): Plugin {
       try {
         const content = await fs.readFile(swPath, 'utf8');
         await fs.writeFile(swPath, content.replace('__BUILD_VERSION__', buildVersion), 'utf8');
-      } catch {}
+      } catch { }
     },
   };
 }
@@ -65,7 +65,6 @@ export default defineConfig(() => {
       }
     },
     build: {
-      target: 'es2018',
       rollupOptions: {
         output: {
           manualChunks: {
