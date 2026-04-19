@@ -19,15 +19,18 @@ function main() {
   const manifest = {
     name: config.site_name,
     short_name: config.site_short_name,
-    start_url: '/',
+    id: '/',
     description: config.site_description,
+    start_url: '/',
+    scope: '/',
     display: 'standalone',
-    orientation: 'portrait',
-    background_color: '#fafafa',
+    display_override: ['standalone', 'minimal-ui'],
     theme_color: themeColor,
+    background_color: '#fafafa',
+    orientation: 'any',
     icons: [
-      { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-      { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+      { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
     ],
   };
 
