@@ -15,9 +15,9 @@ organization_type: "university"
 organization_unit_label: "单位"
 
 # === Brand Assets ===
-logo_light: "/img/logo-light.svg"
-logo_dark: "/img/logo-dark.svg"
-favicon: "/img/logo-light.svg"
+logo_light: "/icon.svg"
+logo_dark: "/icon.svg"
+favicon: "/icon.svg"
 default_cover: "/img/default-cover.svg"
 
 # === Footer ===
