@@ -1,16 +1,19 @@
 ---
-title: "计算机设计大赛院级选拔赛报名启动"
-description: >-
-    面向计算机学院本科生，报名截止4月25日18:00，需提交项目申报书及演示材料，5月上旬现场答辩。
-category: "竞赛相关"
-tags: ["计算机设计大赛", "院级选拔", "创新创业", "团队报名"]
-start_at: '2026-04-19T14:11:35+08:00'
-end_at: '2026-04-25T18:00:00+08:00'
+title: 计算机设计大赛院级选拔赛报名启动
+description: 面向计算机学院本科生，报名截止4月25日18:00，需提交项目申报书及演示材料，5月上旬现场答辩。
+category: 竞赛相关
+tags:
+  - 计算机设计大赛
+  - 院级选拔
+  - 创新创业
+  - 团队报名
+start_at: 2026-04-19T14:11:35+08:00
+end_at: 2026-04-25T18:00:00+08:00
 id: 20260419-info-engineering-001
 school_slug: info-engineering
-published: '2026-04-19T14:11:35+08:00'
+published: 2026-04-19T14:11:35+08:00
 pinned: false
-cover: ""
+cover: /img/photo_001.jpg
 source:
   channel: 学院通知
   sender: 可爱归归

@@ -1,16 +1,19 @@
 ---
-title: "EDU-PUBLISH 通知聚合平台内测志愿者招募"
-description: >-
-    面向计算机学院24、25级学生招募内测志愿者，4月21日截止报名，提供电子证书与实习机会激励。
-category: "通知公告"
-tags: ["内测招募", "EDU-PUBLISH", "科技部", "志愿者"]
-start_at: '2026-04-19T14:11:45+08:00'
-end_at: '2026-04-21T23:59:59+08:00'
+title: EDU-PUBLISH 通知聚合平台内测志愿者招募
+description: 面向计算机学院24、25级学生招募内测志愿者，4月21日截止报名，提供电子证书与实习机会激励。
+category: 通知公告
+tags:
+  - 内测招募
+  - EDU-PUBLISH
+  - 科技部
+  - 志愿者
+start_at: 2026-04-19T14:11:45+08:00
+end_at: 2026-04-21T23:59:59+08:00
 id: 20260419-info-engineering-002
 school_slug: info-engineering
-published: '2026-04-19T14:11:45+08:00'
+published: 2026-04-19T14:11:45+08:00
 pinned: false
-cover: "/img/photo_001.jpg"
+cover: ""
 source:
   channel: 学院通知
   sender: 可爱归归
